@@ -137,30 +137,32 @@ public class MKMUtils {
 		      Configuration conf, Path[] in, Path center, FileSystem fs, int[] ratio)
 		      throws IOException {
 		int cIdxSeq = 0;
-		int rSigma = 0;
-		int[] distribution = new int[taskCount];
-		for(int i = 0; i < taskCount; i++){
-			rSigma += ratio[i];
-		}
-		int singlePart = count/rSigma;
-		for(int i=0; i < taskCount; i++){
-			if(i == 0)
-				distribution[i] = ratio[i];
-			else
-				distribution[i] = distribution[i-1] + ratio[i];
-		}
+//		int rSigma = 0;
+//		int[] distribution = new int[taskCount];
+//		for(int i = 0; i < taskCount; i++){
+//			rSigma += ratio[i];
+//		}
+//		int singlePart = count/rSigma;
+//		for(int i=0; i < taskCount; i++){
+//			if(i == 0)
+//				distribution[i] = ratio[i];
+//			else
+//				distribution[i] = distribution[i-1] + ratio[i];
+//		}
 		
 //		if (fs.exists(out))
 //			fs.delete(out, true);
 		if (fs.exists(center))
 			fs.delete(center, true);
-		if (fs.exists(in))
-			fs.delete(in, true);
 		final SequenceFile.Writer centerWriter = SequenceFile.createWriter(fs,
 		        conf, center, Key.class, Value.class,
 		        CompressionType.NONE);
 		Values centers = new Values(k);
+		Value[] centerArray = centers.getValues();
+		int ki = 0;
 		for(int i =0 ; i < in.length; i++){
+			if (fs.exists(in[i]))
+				fs.delete(in[i], true);
 			final SequenceFile.Writer dataWriter = SequenceFile.createWriter(fs, conf,
 			        in[i], Key.class, Values.class, CompressionType.NONE);
 			Random r = new Random(1000);
@@ -168,7 +170,7 @@ public class MKMUtils {
 			int maxIdx = count < (i+1)*count/in.length ? count : (i+1)*count/in.length; 
 			Values values = new Values(maxIdx);
 			Value[] valArray = values.getValues();
-//			Value[] centerArray = centers.getValues();
+			
 			for (int j = i*count/in.length ; j < maxIdx ; j++) {
 				int[] arr = new int[dimension];
 				for (int d = 0; d < dimension; d++) {
@@ -177,26 +179,18 @@ public class MKMUtils {
 				Value vector = new Value(dimension);
 				vector.setCoordinates(arr);
 				valArray[j] = vector;
+				if (k > ki) {
+					vector.setCentroidIdx(cIdxSeq++);
+					//Need this line for Phadoop and write centers along with the data and comment the one below it.
+//					centerArray[ki++] = vector;
+					centerWriter.append(new Key(r.nextInt(taskCount), VectorType.CENTROID),vector);
+					ki++;
+				}
 			}
 			dataWriter.append(new Key(1, VectorType.REGULAR), values);
 			dataWriter.close();
 		}
-		
-//			dataWriter.append(new Key(getTaskIndex(i, singlePart, taskCount, distribution), VectorType.REGULAR),vector);
-//			if(i < taskCount){
-//				//NOTE : to make sure atleast one point is assigned to a task
-//				dataWriter.append(new Key(i % taskCount, VectorType.REGULAR),vector);
-//			}
-//			else{
-//				//dataWriter.append(new Key(r.nextInt(taskCount), VectorType.REGULAR),vector);
-//			}
-			if (k > i) {
-				vector.setCentroidIdx(cIdxSeq++);
-//				centerWriter.append(new Key(r.nextInt(taskCount), VectorType.CENTROID),vector);
-			}
-		}
 		centerWriter.close();
-		dataWriter.close();
 	}
 	
 	

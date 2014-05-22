@@ -85,7 +85,12 @@ public class MKMDriver {
 			
 			//write input data and centers to the file paths accordingly
 			// NOTE: Make sure centers have a cluster identifier with it.
-			MKMUtils.prepareInput(count, k, dimension, taskCount, conf, new Path(KM_DATA_INPUT_PATH), new Path(KM_CENTER_INPUT_PATH), fs, ratio);
+			Path[] paths = new Path[taskCount];
+			int pi = 0;
+			for(int pj = 0; pj < paths.length; pj++){
+				paths[pj] = new Path(KM_DATA_INPUT_PATH, ""+pj);
+			}
+			MKMUtils.prepareInput(count, k, dimension, taskCount, conf, paths, new Path(KM_CENTER_INPUT_PATH), fs, ratio);
 			long start = System.nanoTime();
 			driver.kmeans(iterations, convergenceDelta);
 			long end = System.nanoTime();
@@ -165,7 +170,6 @@ public class MKMDriver {
 			Job job = Job.getInstance(conf, "kmeans");
 			job.setJarByClass(org.ncsu.sys.MKmeans.MKMDriver.class);
 			
-//			job.setNumMapTasks(conf.getInt("KM.R1", 6));
 			job.setNumReduceTasks(1);
 //		    System.out.println("Number of reduce tasks for job1 set to: "+ conf.getInt("KM.R1", 0));
 		    job.setInputFormatClass(SequenceFileInputFormat.class);
@@ -181,8 +185,12 @@ public class MKMDriver {
 		    
 		    //uncomment the following line when using Phadoop
 		    //if(iteration == 1)
-		    FileInputFormat.addInputPath(job, new Path(conf.get("KM.inputDataPath")));
-		    FileInputFormat.addInputPath(job, centersIn);
+		    for(int i = 0; i < conf.getInt("KM.mapTaskCount", 2); i++){
+			    FileInputFormat.addInputPath(job, new Path(conf.get("KM.inputDataPath"), ""+i));
+		    }
+		    //No need to add the centers path
+//			    FileInputFormat.addInputPath(job, centersIn);
+			    
 		    
 		    FileOutputFormat.setOutputPath(job, centersOut);
 		    
