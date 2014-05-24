@@ -86,7 +86,6 @@ public class MKMDriver {
 			//write input data and centers to the file paths accordingly
 			// NOTE: Make sure centers have a cluster identifier with it.
 			Path[] paths = new Path[taskCount];
-			int pi = 0;
 			for(int pj = 0; pj < paths.length; pj++){
 				paths[pj] = new Path(KM_DATA_INPUT_PATH, ""+pj);
 			}
@@ -109,13 +108,18 @@ public class MKMDriver {
 //				e1.printStackTrace();
 //			}
 			try {
+				List<Value> oldCenters = null;
 				while(!converged && iteration <= maxIterations){
 					
 						Path centersOut = fs.makeQualified(new Path(KM_CENTER_OUTPUT_PATH, "iteration-" + iteration));
+						fs.delete(centersOut, true);
+						//if(oldCenters == null)
+						oldCenters = MKMUtils.getCentroidsFromFile(centersIn, false);
 						this.kmeansJob(centersIn, centersOut, iteration);
-						converged = isConverged(centersIn, centersOut, convergenceDelta, iteration == 1);
+						List<Value> newCenters = MKMUtils.getCentroidsFromFile(centersIn, false);
+						converged = isConverged(oldCenters, newCenters, convergenceDelta);
 						if(!converged){
-							centersIn = centersOut;
+//							centersIn = centersOut;
 							System.out.println("## not converged, going for the next iteration with input from "+ centersIn.toString());
 						}
 						iteration++;
@@ -124,6 +128,40 @@ public class MKMDriver {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
+		}
+		
+		private boolean isConverged(List<Value> oldCentroids, List<Value> newCentroids, int convergenceDelta) throws Exception {
+			boolean converged = true;
+//			if(newCentroids.isEmpty()){
+//				newCentroids = KMUtils.getCentroidsFromFile(centersOut, true);
+//			}
+//			if(newCentroids.isEmpty()){
+//				if(DEBUG) System.out.println("Screw this! I am trying again with a normal read");
+//				newCentroids = KMUtils.getCentroidsFromFile(centersOut, false);
+//			}
+			Hashtable<Integer, Value> oldCentroidMap = new Hashtable<Integer,Value>();
+			Hashtable<Integer, Value> newCentroidMap = new Hashtable<Integer,Value>();
+			
+			if(DEBUG) System.out.println("***OldCentroids***");
+			for(Value centroid : oldCentroids){
+				oldCentroidMap.put(centroid.getCentroidIdx(), centroid);
+				if(DEBUG) System.out.println(centroid);
+			}
+			
+			if(DEBUG) System.out.println("***NewCentroids***");
+			for(Value centroid : newCentroids){
+				newCentroidMap.put(centroid.getCentroidIdx(), centroid);
+				if(DEBUG) System.out.println(centroid);
+			}
+			
+			for(Integer key : oldCentroidMap.keySet()){
+				if(!isConverged(oldCentroidMap.get(key), newCentroidMap.get(key), convergenceDelta)){
+					converged = false;
+					break;
+				}
+			}
+			
+			return converged;
 		}
 		
 		private boolean isConverged(Path centersIn, Path centersOut, int convergenceDelta, boolean isFirstIter) throws Exception{
@@ -177,8 +215,8 @@ public class MKMDriver {
 	 		job.setMapperClass(MKMMapper.class);
 	 		job.setReducerClass(MKMReducer.class);
 //		    job.setPartitionerClass(MKMPartitioner.class);
-		    job.setMapOutputKeyClass(org.ncsu.sys.MKmeans.Key.class);
-		    job.setMapOutputValueClass(org.ncsu.sys.MKmeans.Value.class);
+		    job.setMapOutputKeyClass(IntWritable.class);
+		    job.setMapOutputValueClass(org.ncsu.sys.MKmeans.PartialCentroid.class);
 		    job.setOutputKeyClass(IntWritable.class);
 		    job.setOutputValueClass(org.ncsu.sys.MKmeans.PartialCentroid.class);
 		    
@@ -186,7 +224,9 @@ public class MKMDriver {
 		    //uncomment the following line when using Phadoop
 		    //if(iteration == 1)
 		    for(int i = 0; i < conf.getInt("KM.mapTaskCount", 2); i++){
-			    FileInputFormat.addInputPath(job, new Path(conf.get("KM.inputDataPath"), ""+i));
+		    	Path inputFilePath = new Path(conf.get("KM.inputDataPath"), ""+i);
+		    	if(DEBUG) System.out.println("Adding input path :" + inputFilePath.toString());
+			    FileInputFormat.addInputPath(job, inputFilePath);
 		    }
 		    //No need to add the centers path
 //			    FileInputFormat.addInputPath(job, centersIn);

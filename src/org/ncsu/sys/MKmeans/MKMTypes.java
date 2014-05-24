@@ -3,12 +3,15 @@ package org.ncsu.sys.MKmeans;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.hadoop.io.Writable;
 
 
 public class MKMTypes {
 	
+	public static boolean DEBUG = true;
 	public static int UNDEF_VAL = -1;
 	
 	public static enum VectorType{
@@ -39,15 +42,16 @@ public class MKMTypes {
 	
 	public static class Values implements Writable{
 		private int valCount;
-		private Value[] values;
+		private List<Value> values;
 		
 		public Values(){
 			valCount = 0;
+			values = new ArrayList<Value>();
 		}
 		
 		public Values(int count){
 			this.valCount = count;
-			values = new Value[count];
+			values = new ArrayList<Value>();
 		}
 		
 		public int getValCount() {
@@ -58,31 +62,34 @@ public class MKMTypes {
 			this.valCount = valCount;
 		}
 		
-		public Value[] getValues() {
+		public List<Value> getValues() {
 			return values;
 		}
-		public void setValues(Value[] values) {
+		
+		public void setValues(List<Value> values) {
 			this.values = values;
 		}
-
+		
 		@Override
 		public void readFields(DataInput in) throws IOException {
 			valCount = in.readInt();
-			values = new Value[valCount];
+			values = new ArrayList<Value>();
 			for(int i = 0; i < valCount; i++){
 				Value val = new Value();
 				val.readFields(in);
-				values[i] = val;
-			}
-		}
-
-		@Override
-		public void write(DataOutput out) throws IOException {
-			out.writeInt(valCount);
-			for(int i =0; i < valCount; i++){
-				values[i].write(out);
+				values.add(val);
 			}
 		}
 		
+		@Override
+		public void write(DataOutput out) throws IOException {
+			out.writeInt(valCount);
+			if(values != null && !values.isEmpty()){
+				for(Value value : values){
+					value.write(out);
+				}
+			}
+			if(DEBUG) System.out.println("ValCount : " + valCount + ", #values "+ values.size());
+		}
 	}
 }

@@ -20,6 +20,8 @@ import org.ncsu.sys.MKmeans.MKMTypes.VectorType;
 
 public class MKMUtils {
 
+	private static final boolean DEBUG = true;
+
 	public static int getDistance(Value point, Value centroid) {
 		int distance = 0;
 		int[] pointCoords = point.getCoordinates();
@@ -158,7 +160,7 @@ public class MKMUtils {
 		        conf, center, Key.class, Value.class,
 		        CompressionType.NONE);
 		Values centers = new Values(k);
-		Value[] centerArray = centers.getValues();
+		List<Value> centerArray = centers.getValues();
 		int ki = 0;
 		for(int i =0 ; i < in.length; i++){
 			if (fs.exists(in[i]))
@@ -167,9 +169,9 @@ public class MKMUtils {
 			        in[i], Key.class, Values.class, CompressionType.NONE);
 			Random r = new Random(1000);
 			//maximum index in this file
-			int maxIdx = count < (i+1)*count/in.length ? count : (i+1)*count/in.length; 
-			Values values = new Values(maxIdx);
-			Value[] valArray = values.getValues();
+			int maxIdx = count < (i+1)*count/in.length ? count : (i+1)*count/in.length;
+			Values values = new Values(maxIdx - (i * count/in.length));
+			List<Value> valArray = new ArrayList<Value>();
 			
 			for (int j = i*count/in.length ; j < maxIdx ; j++) {
 				int[] arr = new int[dimension];
@@ -178,7 +180,7 @@ public class MKMUtils {
 				}
 				Value vector = new Value(dimension);
 				vector.setCoordinates(arr);
-				valArray[j] = vector;
+				valArray.add(vector);
 				if (k > ki) {
 					vector.setCentroidIdx(cIdxSeq++);
 					//Need this line for Phadoop and write centers along with the data and comment the one below it.
@@ -187,8 +189,10 @@ public class MKMUtils {
 					ki++;
 				}
 			}
-			dataWriter.append(new Key(1, VectorType.REGULAR), values);
+			values.setValues(valArray);
+			dataWriter.append(new Key(i, VectorType.REGULAR), values);
 			dataWriter.close();
+			if(DEBUG) System.out.println("Done writing to :"+ in[i].toString());
 		}
 		centerWriter.close();
 	}

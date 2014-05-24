@@ -9,10 +9,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer.Context;
 import org.ncsu.sys.MKmeans.MKMTypes.Values;
 import org.ncsu.sys.MKmeans.MKMTypes.VectorType;
 
@@ -33,13 +30,14 @@ public class MKMMapper extends Mapper<Key, Values, IntWritable, PartialCentroid>
 		FileSystem fs;
 		try {
 			fs = FileSystem.get(conf);
-			Path path = new Path(conf.get("KM.tempClusterDir"));
+			Path path = new Path(conf.get("KM.inputCenterPath"));
 			Path filePath = fs.makeQualified(path);
-			centroids = MKMUtils.getPartialCentroidsFromFile(filePath);
+			centroids = MKMUtils.getCentroidsFromFile(filePath, false);
 			if(centroids == null){
 				throw new IOException("No centroids fetched from the file");
 			}
 			isCbuilt = true;
+			if(DEBUG) System.out.println("************Centroids Read form file*************");
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -76,7 +74,9 @@ public class MKMMapper extends Mapper<Key, Values, IntWritable, PartialCentroid>
 				long start =System.nanoTime();
 				partialCentroids = (PartialCentroid[]) classify(vectors, centroids);
 				for(PartialCentroid pcent : partialCentroids){
-					context.write(new IntWritable(pcent.getCentroidIdx()), pcent);
+					IntWritable newKey = new IntWritable(pcent.getCentroidIdx());
+					context.write(newKey, pcent);
+					if(DEBUG) printMapOutput(newKey, pcent);
 				}
 				long end =System.nanoTime();
 				System.out.println("$$ClassifyTime:"+"\t" + (end-start));
@@ -88,6 +88,17 @@ public class MKMMapper extends Mapper<Key, Values, IntWritable, PartialCentroid>
 		
 	}
 	
+	private void printMapOutput(IntWritable newKey, PartialCentroid pcent) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("##### Map output: (" + newKey.get() + ") (" 
+					+ pcent.getDimension() + "," + pcent.getCentroidIdx() + "," + pcent.getCount() + "\n");
+		for(int coord : pcent.getCoordinates()){
+			sb.append(coord + ",");
+		}
+		sb.append(") ");
+		System.out.println(sb.toString());
+	}
+
 	private void buildCentroids(Values values, List<Value> centroidsLoc) {
 		for(Value val : values.getValues()){
 			if(DEBUG) System.out.println("Adding value :" + val);
@@ -101,8 +112,8 @@ public class MKMMapper extends Mapper<Key, Values, IntWritable, PartialCentroid>
 	private PartialCentroid[] classify(List<Value> vectors2, List<Value> centroids2) throws Exception {
 		PartialCentroid[] partialCentroids = new PartialCentroid[centroids2.size()];
 		
-		Hashtable<Integer, PartialCentroid> pCentMapping = new Hashtable<Integer, PartialCentroid>(); 
-		for(PartialCentroid pcent : partialCentroids){
+		Hashtable<Integer, Value> pCentMapping = new Hashtable<Integer, Value>(); 
+		for(Value pcent : centroids2){
 			pCentMapping.put(pcent.getCentroidIdx(), pcent);
 		}
 			

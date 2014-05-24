@@ -107,4 +107,14 @@ public class Value implements WritableComparable {
 		}
 		return 0;
 	}
+	
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append( "[" + this.getDimension() + "," + this.getCentroidIdx() + "(");
+		for(int coord : this.getCoordinates()){
+			sb.append(coord + ",");
+		}
+		sb.append(")] ");
+		return sb.toString();
+	}
 }

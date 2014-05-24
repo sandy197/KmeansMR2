@@ -25,7 +25,7 @@ public class MKMReducer extends Reducer<IntWritable, PartialCentroid, Key, Value
 			fs = FileSystem.get(conf);
 			init(context);
 			//initialize the list of sequence file writers
-			Path path = new Path(conf.get("KM.clusterOut"));
+			Path path = new Path(conf.get("KM.inputCenterPath"));
 			writers = new ArrayList<SequenceFile.Writer>();
 			writers.add(SequenceFile.createWriter(fs, conf, path,
 				      Key.class, Value.class,
@@ -62,17 +62,33 @@ public class MKMReducer extends Reducer<IntWritable, PartialCentroid, Key, Value
 			throws IOException, InterruptedException {
 		// process values
 		Value newCentroid;
+		PartialCentroid newpCentroid = null;
 		for (PartialCentroid val : values) {
-			newCentroid = computeNewCentroid(val);
+			if(newpCentroid == null){
+				newpCentroid = new PartialCentroid(val.getDimension());
+				newpCentroid.copy(val);
+			}
+			else
+			{
+				newpCentroid.addVector(val);
+			}
+//				context.write(new Key(1, VectorType.CENTROID), newCentroid);
+		}
+		try {
+			newCentroid = computeNewCentroid(newpCentroid);
 			//TODO: iterate through all the file and write each of the newCentroids computed
 			for(SequenceFile.Writer writer : writers){
 				writer.append(new Key(1, VectorType.CENTROID), newCentroid);
 			}
-//				context.write(new Key(1, VectorType.CENTROID), newCentroid);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 	
-	private Value computeNewCentroid(PartialCentroid pCent) {
+	private Value computeNewCentroid(PartialCentroid pCent) throws Exception {
+		if(pCent == null){
+			throw new Exception("partialcentroid can not be null");
+		}
 		if(pCent.getCount() == 0)
 			return null;
 		else {
