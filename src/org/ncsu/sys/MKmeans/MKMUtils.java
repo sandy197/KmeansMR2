@@ -178,8 +178,25 @@ public class MKMUtils {
 			}
 		}
 		
-		//TODO: write vectors from each of the subspace and the centers to files
-		
+		//write vectors from each of the subspace and the centers to files
+		int chunkSize = spaceCount / taskCount;
+		for(int i = 0; i < in.length; i ++){
+			try {
+				SequenceFile.Writer dataWriter = SequenceFile.createWriter(fs, conf,
+				    in[i], Key.class, Values.class, CompressionType.NONE);
+				//Write subspace chunks to files
+				int delta = chunkSize > (spaceCount - i*chunkSize) ? (spaceCount - i*chunkSize) : chunkSize;
+				Values values = new Values();
+				for(int j = i * chunkSize; j < (i * chunkSize) + delta; j++){
+					values.addValues(space[j].getVectors());
+				}
+				dataWriter.append(new Key(i, VectorType.REGULAR), values);
+				dataWriter.append(new Key(1, VectorType.CENTROID),centers);
+				dataWriter.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	private static void initSpace(SubSpace[] space, int start, int diffratio, boolean isLinear) {
