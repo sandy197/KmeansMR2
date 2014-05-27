@@ -21,6 +21,7 @@ import org.ncsu.sys.MKmeans.MKMTypes.VectorType;
 public class MKMUtils {
 
 	private static final boolean DEBUG = true;
+	private static final int RAND_SEED = 1000;
 
 	public static int getDistance(Value point, Value centroid) {
 		int distance = 0;
@@ -135,6 +136,87 @@ public class MKMUtils {
 	
 	//public static int[] ratio = {2, 4, 8, 16, 32, 64};
 	
+	/**
+	 * 
+	 * 
+	 * @param count
+	 * @param k
+	 * @param dimension
+	 * @param segPerDim
+	 * @param maxNum
+	 * @param taskCount
+	 * @param conf
+	 * @param in
+	 * @param center
+	 * @param fs
+	 * @param ratio // <start> <offset> <linear/exponential> instead of ratio
+	 */
+	public static void prepareAstroPhyInput(int count, int k, int dimension, int segPerDim, 
+			int maxNum, int taskCount, Configuration conf, Path[] in, Path center, FileSystem fs, 
+			int taskStart, int diffratio, boolean isLinear){
+		int ki = 0;
+		int spaceCount = (int) Math.pow(segPerDim, dimension);
+		int segLength = maxNum/segPerDim;
+		Values centers = new Values(k);
+		List<Value> centerArray = centers.getValues();
+		SubSpace[] space = new SubSpace[spaceCount]; 
+		Random r = new Random(RAND_SEED);
+		
+		initSpace(space, taskStart, diffratio, isLinear);
+		
+		while(!isSpaceFull(space)){
+			int[] arr = new int[dimension];
+			for (int d = 0; d < dimension; d++) {
+				arr[d] = r.nextInt(maxNum);
+			}
+			Value vector = new Value(dimension);
+			vector.setCoordinates(arr);
+			int idx = assignSubSpace(vector, segLength, segPerDim, dimension);
+			if(space[idx].offer(vector) && k < ki){
+				vector.setCentroidIdx(ki++);
+				centerArray.add(vector);
+			}
+		}
+		
+		//TODO: write vectors from each of the subspace and the centers to files
+		
+	}
+	
+	private static void initSpace(SubSpace[] space, int start, int diffratio, boolean isLinear) {
+		int idSeq = 0;
+		int capacity = start;
+		for(SubSpace sspace : space){
+			if(idSeq != 0){
+				if(isLinear){
+					capacity += diffratio;
+				}
+				else
+				{
+					capacity *= diffratio;
+				}
+			}
+			sspace = new SubSpace(idSeq++, capacity);
+		}
+	}
+
+	private static int assignSubSpace(Value vector, int segLength, int segPerDim, int dimension){
+		int subSpaceId = 0;
+		int[] coords = vector.getCoordinates();
+		for(int i = 0; i < vector.getDimension(); i++){
+			subSpaceId += (coords[i]/segLength) * (int)Math.pow(segPerDim, i);
+		}
+		return subSpaceId;
+	}
+	
+	private static boolean isSpaceFull(SubSpace[] space) {
+		for(SubSpace sspace : space){
+			if(!sspace.isFull())
+				return false;
+		}
+		//all subspaces are full
+		return true;
+	}
+
 	public static void prepareInput(int count, int k, int dimension, int taskCount,
 		      Configuration conf, Path[] in, Path center, FileSystem fs, int[] ratio)
 		      throws IOException {
